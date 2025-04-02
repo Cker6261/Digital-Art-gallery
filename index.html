@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css"
+        integrity="sha512-z3gLpd7yknf1YoNbCzqRKc4qyor8gaKU1qmn+CShxbuBusANI9QpRohGBreCFkKxLhei6S9CQXFEbbKuqLg0DA=="
+        crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="stylesheet" href="./style.css">
+    <title>Digital Art Gallery</title>
+</head>
+<body>
+    <nav>
+        <a class="logo" href="#"><i class="fab fa-pinterest"></i></a>
+        <a href="#" class="active">Gallery</a>
+        <div class="upload-container">
+            <input type="file" id="fileInput" accept="image/*" style="display: none;" onchange="uploadFile()" />
+            <button onclick="document.getElementById('fileInput').click()">Upload Art</button>
+        </div>
+        <input type="text" class="search" placeholder="Search artwork...">
+        <a href="#" class="icon"><i class="fas fa-bell"></i></a>
+        <a href="#" class="icon"><i class="fas fa-download"></i></a>
+    </nav>
+
+    <div id="loader"></div>
+    <div id="container">
+        <div class="col"></div>
+        <div class="col"></div>
+        <div class="col"></div>
+        <div class="col"></div>
+        <div class="col"></div>
+    </div>
+
+    <script src="./script.js"></script>
+    <script>
+    const loader = document.getElementById('loader');
+    const container = document.getElementById('container');
+
+    // Show loading state
+    function showLoader() {
+        loader.style.display = 'block';
+        container.style.display = 'none';
+    }
+
+    // Hide loading state
+    function hideLoader() {
+        loader.style.display = 'none';
+        container.style.display = 'flex';
+    }
+
+    // When page first loads
+    window.onload = async function() {
+        showLoader();
+        try {
+            await fetchImages();
+            // Wait for all images to load before hiding loader
+            const images = document.querySelectorAll('img');
+            await Promise.all(Array.from(images).map(img => {
+                if (img.complete) return;
+                return new Promise((resolve) => {
+                    img.addEventListener('load', resolve);
+                    img.addEventListener('error', resolve);
+                });
+            }));
+            hideLoader();
+        } catch (error) {
+            console.error('Error loading images:', error);
+            hideLoader();
+        }
+    }
+
+    // When uploading new image
+    async function uploadFile() {
+        const file = document.getElementById('fileInput').files[0];
+        if (!file) return;
+
+        showLoader();
+        try {
+            await handleImageUpload();
+            // Create a preview of the uploaded image
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                const img = new Image();
+                img.src = e.target.result;
+                await new Promise((resolve) => {
+                    img.onload = resolve;
+                    img.onerror = resolve;
+                });
+                hideLoader();
+            };
+            reader.readAsDataURL(file);
+        } catch (error) {
+            console.error('Upload failed:', error);
+            hideLoader();
+        }
+    }
+</script>
+</body>
+</html>
