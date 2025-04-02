@@ -12,7 +12,7 @@ const uploadFile = async () => {
     formData.append("image", file);
 
     try {
-        const response = await fetch("http://localhost:5000/upload", {
+        const response = await fetch("/upload", {
             method: "POST",
             body: formData,
         });
@@ -44,18 +44,47 @@ const clearGallery = () => {
 const fetchImages = async () => {
     try {
         document.getElementById('loader').style.display = 'block';
-        const response = await fetch("http://localhost:5000/images");
-        const data = await response.json();
-
-        if (data.images && data.images.length > 0) {
+        
+        // Get images from S3 bucket
+        const S3_BUCKET_URL = "https://art-gallery-images-bucket.s3.eu-north-1.amazonaws.com/";
+        
+        try {
+            // Try fetching from the API first
+            const response = await fetch("/images");
+            const data = await response.json();
+            
+            if (data.images && data.images.length > 0) {
+                const cols = Array.from(document.getElementsByClassName("col"));
+                data.images.forEach((image, index) => {
+                    createCard(image.url, cols[index % cols.length], image.name);
+                });
+            }
+        } catch (error) {
+            console.log("Fetching from API failed, using direct S3 access");
+            
+            // Fallback: Load hardcoded images directly from S3
+            const imageNames = [
+                "download.jpg",
+                "glWla8v.png",
+                "1198598-3840x2160-desktop-4k-studio-ghibli-background-image.jpg",
+                "1743335438225-653393.jpg",
+                "1198712-3840x2160-desktop-4k-studio-ghibli-wallpaper.jpg", 
+                "sea-of-stars-game-screenshot-4k-wallpaper-uhdpaper.com-905@1@h.jpg",
+                "star-wars-kylo-ren-rey-from-star-wars-bb-8-wallpaper-0788ce9a3b1dfa6ddfe2779fd7d6b4f1.jpg",
+                "wallpaperflare.com_wallpaper (1).jpg",
+                "wallpaperflare.com_wallpaper (2).jpg", 
+                "wallpaperflare.com_wallpaper (3).jpg",
+                "wallpaperflare.com_wallpaper.jpg",
+                "wp3614529-star-wars-4k-wallpapers.jpg"
+            ];
+            
             const cols = Array.from(document.getElementsByClassName("col"));
-            data.images.forEach((image, index) => {
-                const fullUrl = `http://localhost:5000${image.url}`;
-                createCard(fullUrl, cols[index % cols.length], image.name);
+            imageNames.forEach((imageName, index) => {
+                const fullUrl = S3_BUCKET_URL + imageName;
+                createCard(fullUrl, cols[index % cols.length], imageName);
             });
-        } else {
-            console.log("No images found.");
         }
+        
         document.getElementById('loader').style.display = 'none';
     } catch (error) {
         console.error("Error fetching images:", error);
@@ -79,8 +108,7 @@ const createCard = (imageUrl, col, imageName) => {
     const downloadBtn = document.createElement("button");
     downloadBtn.innerHTML = '<i class="fas fa-download"></i>';
     downloadBtn.onclick = () => {
-        const filename = imageUrl.split("/").pop();
-        window.open(`http://localhost:5000/download/${filename}`, '_blank');
+        window.open(imageUrl, '_blank');
     };
 
     overlay.appendChild(downloadBtn);
