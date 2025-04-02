@@ -1,5 +1,6 @@
 # CI/CD Pipeline for Art Gallery App
 # Updated with new credentials
+# Updated with required IAM permissions
 name: CI/CD Pipeline
 
 on:
