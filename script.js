@@ -80,6 +80,39 @@ const testImageUrl = (url) => {
     });
 };
 
+// Create tiny debug info element at the bottom left
+const showDebugInfo = (message) => {
+    // Remove existing debug info if it exists
+    const existingDebug = document.getElementById('debug-info');
+    if (existingDebug) {
+        existingDebug.remove();
+    }
+    
+    const debugInfo = document.createElement('div');
+    debugInfo.id = 'debug-info';
+    debugInfo.style.position = 'fixed';
+    debugInfo.style.bottom = '5px';
+    debugInfo.style.left = '5px';
+    debugInfo.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+    debugInfo.style.color = 'white';
+    debugInfo.style.padding = '3px 6px';
+    debugInfo.style.fontSize = '10px';
+    debugInfo.style.borderRadius = '3px';
+    debugInfo.style.zIndex = '1000';
+    debugInfo.style.opacity = '0.7';
+    
+    debugInfo.textContent = message;
+    document.body.appendChild(debugInfo);
+    
+    // Auto-hide after 10 seconds
+    setTimeout(() => {
+        if (debugInfo.parentNode) {
+            debugInfo.style.opacity = '0';
+            debugInfo.style.transition = 'opacity 1s ease';
+        }
+    }, 10000);
+};
+
 // Fetch Images and Display
 const fetchImages = async () => {
     try {
@@ -110,24 +143,7 @@ const fetchImages = async () => {
                 loadedImages++;
             }
             
-            // Add debug info
-            const debugInfo = document.createElement('div');
-            debugInfo.id = 'debug-info';
-            debugInfo.style.position = 'fixed';
-            debugInfo.style.top = '0';
-            debugInfo.style.left = '0';
-            debugInfo.style.backgroundColor = 'white';
-            debugInfo.style.padding = '10px';
-            debugInfo.style.zIndex = '1000';
-            
-            // Remove existing debug info if it exists
-            const existingDebug = document.getElementById('debug-info');
-            if (existingDebug) {
-                existingDebug.remove();
-            }
-            
-            debugInfo.textContent = `Loaded ${loadedImages} images from server API`;
-            document.body.appendChild(debugInfo);
+            showDebugInfo(`${loadedImages} images loaded`);
         } else {
             // Fallback to direct S3 loading if server API fails
             // Load hardcoded images directly from S3 - trying different URL formats
@@ -161,24 +177,6 @@ const fetchImages = async () => {
                 "galaxy-space-pixel-art-digital-art-4k-wallpaper-uhdpaper.com-762@0@i.jpg"
             ];
             
-            // Add debug info to page
-            const debugInfo = document.createElement('div');
-            debugInfo.id = 'debug-info';
-            debugInfo.style.position = 'fixed';
-            debugInfo.style.top = '0';
-            debugInfo.style.left = '0';
-            debugInfo.style.backgroundColor = 'white';
-            debugInfo.style.padding = '10px';
-            debugInfo.style.zIndex = '1000';
-            
-            // Remove existing debug info if it exists
-            const existingDebug = document.getElementById('debug-info');
-            if (existingDebug) {
-                existingDebug.remove();
-            }
-            
-            document.body.appendChild(debugInfo);
-            
             // Try each bucket URL format
             let workingBucketUrl = null;
             for (const bucketUrl of BUCKET_REGIONS) {
@@ -188,13 +186,12 @@ const fetchImages = async () => {
                 
                 if (isWorking) {
                     workingBucketUrl = bucketUrl;
-                    debugInfo.textContent = `Working bucket URL: ${workingBucketUrl}`;
                     break;
                 }
             }
             
             if (!workingBucketUrl) {
-                debugInfo.textContent = "ERROR: Could not access any S3 bucket URL. Check S3 permissions!";
+                showDebugInfo("Error: Cannot access S3 bucket");
             } else {
                 const cols = Array.from(document.getElementsByClassName("col"));
                 let loadedImages = 0;
@@ -233,7 +230,7 @@ const fetchImages = async () => {
                 }
                 
                 // Update debug info with loaded images count
-                debugInfo.textContent = `Working bucket URL: ${workingBucketUrl} | Loaded ${loadedImages} images | Failed: ${failedImages}`;
+                showDebugInfo(`${loadedImages} images loaded`);
             }
         }
         
@@ -269,12 +266,19 @@ const createCard = (imageUrl, col, imageName, isLocalOnly = false) => {
     img.src = imageUrl;
     img.alt = imageName || "Digital Artwork";
     img.style.width = "100%";
+    
+    // Make image clickable to open in new tab
+    img.style.cursor = "pointer";
+    img.onclick = () => {
+        window.open(imageUrl, '_blank');
+    };
 
     const overlay = document.createElement("div");
     overlay.classList.add("card-overlay");
 
     const downloadBtn = document.createElement("button");
     downloadBtn.innerHTML = '<i class="fas fa-download"></i>';
+    downloadBtn.title = "Download image";
     downloadBtn.onclick = (e) => {
         e.stopPropagation(); // Prevent event bubbling
         
@@ -283,11 +287,10 @@ const createCard = (imageUrl, col, imageName, isLocalOnly = false) => {
             return;
         }
         
-        // Create a temporary link element
+        // Create a temporary link element for downloading
         const a = document.createElement('a');
         a.href = imageUrl;
         a.download = imageName || 'download.jpg';
-        a.target = '_blank';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
