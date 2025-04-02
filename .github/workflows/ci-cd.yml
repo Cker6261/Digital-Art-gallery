@@ -1,3 +1,4 @@
+# CI/CD Pipeline for Art Gallery App
 name: CI/CD Pipeline
 
 on:
@@ -7,9 +8,12 @@ on:
     branches: [ main ]
 
 env:
-  AWS_REGION: us-east-1
+  AWS_REGION: eu-north-1
   ECR_REPOSITORY: art-gallery-app
   ECS_CLUSTER: art-gallery-cluster
+  ECS_SERVICE: art-gallery-service
+  ECS_TASK_DEFINITION: terraform/task-definition.json
+  CONTAINER_NAME: art-gallery-app
 
 jobs:
   build-and-deploy:
@@ -30,12 +34,14 @@ jobs:
       uses: aws-actions/amazon-ecr-login@v1
 
     - name: Build, tag, and push image to Amazon ECR
+      id: build-image
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         IMAGE_TAG: ${{ github.sha }}
       run: |
         docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
 
     - name: Set up Terraform
       uses: hashicorp/setup-terraform@v2
@@ -55,3 +61,26 @@ jobs:
       run: |
         cd terraform
         terraform apply -auto-approve
+
+    - name: Download task definition
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      run: |
+        aws ecs describe-task-definition --task-definition art-gallery-app --region ${{ env.AWS_REGION }} --query taskDefinition > ${{ env.ECS_TASK_DEFINITION }}
+
+    - name: Fill in the new image ID in the Amazon ECS task definition
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      id: task-def
+      uses: aws-actions/amazon-ecs-render-task-definition@v1
+      with:
+        task-definition: ${{ env.ECS_TASK_DEFINITION }}
+        container-name: ${{ env.CONTAINER_NAME }}
+        image: ${{ steps.build-image.outputs.image }}
+
+    - name: Deploy Amazon ECS task definition
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      uses: aws-actions/amazon-ecs-deploy-task-definition@v1
+      with:
+        task-definition: ${{ steps.task-def.outputs.task-definition }}
+        service: ${{ env.ECS_SERVICE }}
+        cluster: ${{ env.ECS_CLUSTER }}
+        wait-for-service-stability: true
