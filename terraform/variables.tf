@@ -15,3 +15,9 @@ variable "ecr_repository_name" {
   type        = string
   default     = "art-gallery-app"
 }
+
+variable "domain_name" {
+  description = "Domain name for the application (optional)"
+  type        = string
+  default     = ""
+}

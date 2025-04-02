@@ -6,16 +6,23 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css"
         integrity="sha512-z3gLpd7yknf1YoNbCzqRKc4qyor8gaKU1qmn+CShxbuBusANI9QpRohGBreCFkKxLhei6S9CQXFEbbKuqLg0DA=="
         crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="./style.css">
-    <title>Digital Art Gallery</title>
+    <title>Artistry Gallery | Digital Art Collection</title>
+    <link rel="icon" href="https://art-gallery-images-bucket.s3.eu-north-1.amazonaws.com/favicon.ico" type="image/x-icon">
+    <meta name="description" content="Explore and share beautiful digital art in our online gallery.">
 </head>
 <body>
     <nav>
-        <a class="logo" href="#"><i class="fab fa-pinterest"></i></a>
-        <a href="#" class="active">Gallery</a>
+        <a class="logo" href="#"><i class="fab fa-artstation"></i> Artistry</a>
+        <a href="#" class="active"><i class="fas fa-images"></i> Gallery</a>
+        <a href="#"><i class="fas fa-users"></i> Artists</a>
+        <a href="#"><i class="fas fa-paint-brush"></i> Collections</a>
         <div class="upload-container">
             <input type="file" id="fileInput" accept="image/*" style="display: none;" onchange="uploadFile()" />
-            <button onclick="document.getElementById('fileInput').click()">Upload Art</button>
+            <button onclick="document.getElementById('fileInput').click()"><i class="fas fa-cloud-upload-alt"></i> Upload Art</button>
         </div>
         <input type="text" class="search" placeholder="Search artwork...">
         <a href="#" class="icon"><i class="fas fa-bell"></i></a>
@@ -23,6 +30,7 @@
     </nav>
 
     <div id="loader"></div>
+    
     <div id="container">
         <div class="col"></div>
         <div class="col"></div>
@@ -30,22 +38,64 @@
         <div class="col"></div>
         <div class="col"></div>
     </div>
+    
+    <div class="empty-state" style="display: none;">
+        <i class="fas fa-images"></i>
+        <h2>No Images Yet</h2>
+        <p>Upload your first artwork to get started with your digital art gallery collection.</p>
+        <button onclick="document.getElementById('fileInput').click()">
+            <i class="fas fa-cloud-upload-alt"></i> Upload Your First Image
+        </button>
+    </div>
+
+    <footer>
+        <div class="footer-content">
+            <div class="footer-logo">
+                <i class="fab fa-artstation"></i> Artistry
+            </div>
+            <div class="footer-links">
+                <a href="#">About</a>
+                <a href="#">Privacy</a>
+                <a href="#">Terms</a>
+                <a href="#">Contact</a>
+            </div>
+            <div class="footer-social">
+                <a href="#"><i class="fab fa-instagram"></i></a>
+                <a href="#"><i class="fab fa-twitter"></i></a>
+                <a href="#"><i class="fab fa-pinterest"></i></a>
+                <a href="#"><i class="fab fa-facebook"></i></a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; 2025 Artistry Gallery. All rights reserved.</p>
+        </div>
+    </footer>
 
     <script src="./script.js"></script>
     <script>
     const loader = document.getElementById('loader');
     const container = document.getElementById('container');
+    const emptyState = document.querySelector('.empty-state');
 
     // Show loading state
     function showLoader() {
         loader.style.display = 'block';
         container.style.display = 'none';
+        emptyState.style.display = 'none';
     }
 
     // Hide loading state
-    function hideLoader() {
+    function hideLoader(hasImages) {
         loader.style.display = 'none';
-        container.style.display = 'flex';
+        
+        // Show empty state if no images
+        if (!hasImages) {
+            container.style.display = 'none';
+            emptyState.style.display = 'flex';
+        } else {
+            container.style.display = 'flex';
+            emptyState.style.display = 'none';
+        }
     }
 
     // When page first loads
@@ -53,6 +103,10 @@
         showLoader();
         try {
             await fetchImages();
+            
+            // Check if any images were loaded
+            const hasImages = document.querySelectorAll('.card').length > 0;
+            
             // Wait for all images to load before hiding loader
             const images = document.querySelectorAll('img');
             await Promise.all(Array.from(images).map(img => {
@@ -62,10 +116,11 @@
                     img.addEventListener('error', resolve);
                 });
             }));
-            hideLoader();
+            
+            hideLoader(hasImages);
         } catch (error) {
             console.error('Error loading images:', error);
-            hideLoader();
+            hideLoader(false);
         }
     }
 

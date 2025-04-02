@@ -336,3 +336,148 @@ resource "aws_ecs_service" "art_gallery" {
     assign_public_ip = true
   }
 }
+
+# Add Application Load Balancer (ALB)
+resource "aws_lb" "app" {
+  name               = "art-gallery-alb"
+  internal           = false
+  load_balancer_type = "application"
+  security_groups    = [aws_security_group.alb.id]
+  subnets            = [aws_subnet.public1.id, aws_subnet.public2.id]
+
+  enable_deletion_protection = false
+
+  tags = {
+    Name = "art-gallery-alb"
+  }
+}
+
+# ALB Security Group
+resource "aws_security_group" "alb" {
+  name        = "art-gallery-alb-sg"
+  description = "Security group for the art gallery ALB"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+}
+
+# ALB Target Group
+resource "aws_lb_target_group" "app" {
+  name     = "art-gallery-tg"
+  port     = 5000
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.main.id
+  target_type = "ip"
+  
+  health_check {
+    healthy_threshold   = 3
+    unhealthy_threshold = 3
+    timeout             = 5
+    interval            = 30
+    path                = "/"
+    port                = "traffic-port"
+  }
+}
+
+# ALB Listener
+resource "aws_lb_listener" "http" {
+  load_balancer_arn = aws_lb.app.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.app.arn
+  }
+}
+
+# Update ECS service to use ALB
+resource "aws_ecs_service" "art_gallery_with_lb" {
+  name            = "art-gallery-service"
+  cluster         = aws_ecs_cluster.art_gallery.id
+  task_definition = aws_ecs_task_definition.art_gallery.arn
+  desired_count   = 1
+  launch_type     = "FARGATE"
+  depends_on      = [aws_lb_listener.http]
+
+  network_configuration {
+    subnets          = [aws_subnet.public1.id, aws_subnet.public2.id]
+    security_groups  = [aws_security_group.app.id]
+    assign_public_ip = true
+  }
+
+  load_balancer {
+    target_group_arn = aws_lb_target_group.app.arn
+    container_name   = "art-gallery-app"
+    container_port   = 5000
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# Set up Route 53 zone (optional - use if you have a domain)
+resource "aws_route53_zone" "main" {
+  count = var.domain_name != "" ? 1 : 0
+  name  = var.domain_name
+}
+
+# Route 53 record pointing to the ALB
+resource "aws_route53_record" "www" {
+  count   = var.domain_name != "" ? 1 : 0
+  zone_id = aws_route53_zone.main[0].zone_id
+  name    = "www.${var.domain_name}"
+  type    = "A"
+
+  alias {
+    name                   = aws_lb.app.dns_name
+    zone_id                = aws_lb.app.zone_id
+    evaluate_target_health = true
+  }
+}
+
+# Route 53 record for apex domain
+resource "aws_route53_record" "apex" {
+  count   = var.domain_name != "" ? 1 : 0
+  zone_id = aws_route53_zone.main[0].zone_id
+  name    = var.domain_name
+  type    = "A"
+
+  alias {
+    name                   = aws_lb.app.dns_name
+    zone_id                = aws_lb.app.zone_id
+    evaluate_target_health = true
+  }
+}
+
+# Output the ALB DNS name for access
+output "alb_dns_name" {
+  value = aws_lb.app.dns_name
+  description = "The DNS name of the load balancer"
+}
+
+# Output domain names if configured
+output "domain_name" {
+  value = var.domain_name != "" ? "https://${var.domain_name}" : null
+  description = "The domain name if configured"
+}
