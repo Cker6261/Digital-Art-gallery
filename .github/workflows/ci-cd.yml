@@ -1,6 +1,7 @@
 # CI/CD Pipeline for Art Gallery App
 # Updated with new credentials
 # Updated with required IAM permissions
+# Skip terraform infrastructure creation - using existing resources
 name: CI/CD Pipeline
 
 on:
@@ -14,7 +15,6 @@ env:
   ECR_REPOSITORY: art-gallery-app
   ECS_CLUSTER: art-gallery-cluster
   ECS_SERVICE: art-gallery-service
-  ECS_TASK_DEFINITION: terraform/task-definition.json
   CONTAINER_NAME: art-gallery-app
 
 jobs:
@@ -42,44 +42,24 @@ jobs:
         IMAGE_TAG: ${{ github.sha }}
       run: |
         docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+        docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
         echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
 
-    - name: Set up Terraform
-      uses: hashicorp/setup-terraform@v2
-
-    - name: Terraform Init
+    - name: Download current task definition
       run: |
-        cd terraform
-        terraform init
-
-    - name: Terraform Plan
-      run: |
-        cd terraform
-        terraform plan
-
-    - name: Terraform Apply
-      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-      run: |
-        cd terraform
-        terraform apply -auto-approve
-
-    - name: Download task definition
-      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-      run: |
-        aws ecs describe-task-definition --task-definition art-gallery-app --region ${{ env.AWS_REGION }} --query taskDefinition > ${{ env.ECS_TASK_DEFINITION }}
+        aws ecs describe-task-definition --task-definition art-gallery-app --region ${{ env.AWS_REGION }} --query taskDefinition > task-definition.json
 
     - name: Fill in the new image ID in the Amazon ECS task definition
-      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
       id: task-def
       uses: aws-actions/amazon-ecs-render-task-definition@v1
       with:
-        task-definition: ${{ env.ECS_TASK_DEFINITION }}
+        task-definition: task-definition.json
         container-name: ${{ env.CONTAINER_NAME }}
         image: ${{ steps.build-image.outputs.image }}
 
     - name: Deploy Amazon ECS task definition
-      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
       uses: aws-actions/amazon-ecs-deploy-task-definition@v1
       with:
         task-definition: ${{ steps.task-def.outputs.task-definition }}
