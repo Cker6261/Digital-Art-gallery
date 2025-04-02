@@ -40,49 +40,102 @@ const clearGallery = () => {
     });
 };
 
+// Test if an image URL is accessible
+const testImageUrl = (url) => {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve(true);
+        img.onerror = () => resolve(false);
+        img.src = url;
+    });
+};
+
 // Fetch Images and Display
 const fetchImages = async () => {
     try {
         document.getElementById('loader').style.display = 'block';
         
-        // Get images from S3 bucket
-        const S3_BUCKET_URL = "https://art-gallery-images-bucket.s3.eu-north-1.amazonaws.com/";
+        // Load hardcoded images directly from S3 - trying different URL formats
+        const BUCKET_REGIONS = [
+            "https://art-gallery-images-bucket.s3.eu-north-1.amazonaws.com/",
+            "https://s3.eu-north-1.amazonaws.com/art-gallery-images-bucket/",
+            "https://art-gallery-images-bucket.s3.amazonaws.com/"
+        ];
         
-        try {
-            // Try fetching from the API first
-            const response = await fetch("/images");
-            const data = await response.json();
+        const imageNames = [
+            "download.jpg",
+            "glWla8v.png",
+            "1198598-3840x2160-desktop-4k-studio-ghibli-background-image.jpg",
+            "1743335438225-653393.jpg",
+            "1198712-3840x2160-desktop-4k-studio-ghibli-wallpaper.jpg", 
+            "sea-of-stars-game-screenshot-4k-wallpaper-uhdpaper.com-905@1@h.jpg",
+            "star-wars-kylo-ren-rey-from-star-wars-bb-8-wallpaper-0788ce9a3b1dfa6ddfe2779fd7d6b4f1.jpg",
+            "wallpaperflare.com_wallpaper(1).jpg",
+            "wallpaperflare.com_wallpaper(2).jpg", 
+            "wallpaperflare.com_wallpaper(3).jpg",
+            "wallpaperflare.com_wallpaper.jpg",
+            "wp3614529-star-wars-4k-wallpapers.jpg"
+        ];
+        
+        // Add debug info to page
+        const debugInfo = document.createElement('div');
+        debugInfo.style.position = 'fixed';
+        debugInfo.style.top = '0';
+        debugInfo.style.left = '0';
+        debugInfo.style.backgroundColor = 'white';
+        debugInfo.style.padding = '10px';
+        debugInfo.style.zIndex = '1000';
+        document.body.appendChild(debugInfo);
+        
+        // Try each bucket URL format
+        let workingBucketUrl = null;
+        for (const bucketUrl of BUCKET_REGIONS) {
+            // Test with a simple image
+            const testUrl = bucketUrl + "download.jpg";
+            const isWorking = await testImageUrl(testUrl);
             
-            if (data.images && data.images.length > 0) {
-                const cols = Array.from(document.getElementsByClassName("col"));
-                data.images.forEach((image, index) => {
-                    createCard(image.url, cols[index % cols.length], image.name);
-                });
+            if (isWorking) {
+                workingBucketUrl = bucketUrl;
+                debugInfo.textContent = `Working bucket URL: ${workingBucketUrl}`;
+                break;
             }
-        } catch (error) {
-            console.log("Fetching from API failed, using direct S3 access");
-            
-            // Fallback: Load hardcoded images directly from S3
-            const imageNames = [
-                "download.jpg",
-                "glWla8v.png",
-                "1198598-3840x2160-desktop-4k-studio-ghibli-background-image.jpg",
-                "1743335438225-653393.jpg",
-                "1198712-3840x2160-desktop-4k-studio-ghibli-wallpaper.jpg", 
-                "sea-of-stars-game-screenshot-4k-wallpaper-uhdpaper.com-905@1@h.jpg",
-                "star-wars-kylo-ren-rey-from-star-wars-bb-8-wallpaper-0788ce9a3b1dfa6ddfe2779fd7d6b4f1.jpg",
-                "wallpaperflare.com_wallpaper (1).jpg",
-                "wallpaperflare.com_wallpaper (2).jpg", 
-                "wallpaperflare.com_wallpaper (3).jpg",
-                "wallpaperflare.com_wallpaper.jpg",
-                "wp3614529-star-wars-4k-wallpapers.jpg"
-            ];
-            
+        }
+        
+        if (!workingBucketUrl) {
+            debugInfo.textContent = "ERROR: Could not access any S3 bucket URL. Check S3 permissions!";
+        } else {
             const cols = Array.from(document.getElementsByClassName("col"));
-            imageNames.forEach((imageName, index) => {
-                const fullUrl = S3_BUCKET_URL + imageName;
-                createCard(fullUrl, cols[index % cols.length], imageName);
-            });
+            let loadedImages = 0;
+            
+            for (const imageName of imageNames) {
+                // URL encode the image name to handle spaces and special characters
+                const encodedName = encodeURIComponent(imageName);
+                const fullUrl = workingBucketUrl + encodedName;
+                
+                const isLoaded = await testImageUrl(fullUrl);
+                if (isLoaded) {
+                    createCard(fullUrl, cols[loadedImages % cols.length], imageName);
+                    loadedImages++;
+                }
+            }
+            
+            debugInfo.textContent += ` | Loaded ${loadedImages} images`;
+            
+            // If no images loaded, try without encoding
+            if (loadedImages === 0) {
+                for (const imageName of imageNames) {
+                    // Try without encoding
+                    const fullUrl = workingBucketUrl + imageName;
+                    
+                    const isLoaded = await testImageUrl(fullUrl);
+                    if (isLoaded) {
+                        createCard(fullUrl, cols[loadedImages % cols.length], imageName);
+                        loadedImages++;
+                    }
+                }
+                
+                debugInfo.textContent += ` | After retry: ${loadedImages} images`;
+            }
         }
         
         document.getElementById('loader').style.display = 'none';
