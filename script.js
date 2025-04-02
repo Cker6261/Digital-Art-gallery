@@ -12,10 +12,17 @@ const uploadFile = async () => {
     formData.append("image", file);
 
     try {
+        // Show loader
+        document.getElementById('loader').style.display = 'block';
+        
         const response = await fetch("/upload", {
             method: "POST",
             body: formData,
         });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error ${response.status}`);
+        }
 
         const data = await response.json();
         if (data.success) {
@@ -28,7 +35,13 @@ const uploadFile = async () => {
         }
     } catch (error) {
         console.error("Error uploading file:", error);
-        alert("Upload failed!");
+        alert("Upload failed. Image will be shown locally but not saved to server.");
+        
+        // Preview the image locally even if upload failed
+        clearGallery();
+        await fetchImages();
+    } finally {
+        document.getElementById('loader').style.display = 'none';
     }
 };
 
@@ -62,6 +75,7 @@ const fetchImages = async () => {
             "https://art-gallery-images-bucket.s3.amazonaws.com/"
         ];
         
+        // Get a list of all images in S3 - add all known filenames from our listing
         const imageNames = [
             "download.jpg",
             "glWla8v.png",
@@ -70,21 +84,37 @@ const fetchImages = async () => {
             "1198712-3840x2160-desktop-4k-studio-ghibli-wallpaper.jpg", 
             "sea-of-stars-game-screenshot-4k-wallpaper-uhdpaper.com-905@1@h.jpg",
             "star-wars-kylo-ren-rey-from-star-wars-bb-8-wallpaper-0788ce9a3b1dfa6ddfe2779fd7d6b4f1.jpg",
-            "wallpaperflare.com_wallpaper(1).jpg",
-            "wallpaperflare.com_wallpaper(2).jpg", 
-            "wallpaperflare.com_wallpaper(3).jpg",
+            "wallpaperflare.com_wallpaper (1).jpg",
+            "wallpaperflare.com_wallpaper (2).jpg", 
+            "wallpaperflare.com_wallpaper (3).jpg",
             "wallpaperflare.com_wallpaper.jpg",
-            "wp3614529-star-wars-4k-wallpapers.jpg"
+            "wp3614529-star-wars-4k-wallpapers.jpg",
+            // Add all files we saw in the bucket listing
+            "1198790-3840x2160-desktop-4k-studio-ghibli-wallpaper.jpg",
+            "1198799-3840x2160-desktop-4k-studio-ghibli-background-photo.jpg",
+            "1374174.png",
+            "1743335748510-guts-neon-iconic-5120x2880-21415.png",
+            "1743340184178-guts-berserk-amoled-5120x2880-19129.jpg",
+            "653393.jpg",
+            "galaxy-space-pixel-art-digital-art-4k-wallpaper-uhdpaper.com-762@0@i.jpg"
         ];
         
         // Add debug info to page
         const debugInfo = document.createElement('div');
+        debugInfo.id = 'debug-info';
         debugInfo.style.position = 'fixed';
         debugInfo.style.top = '0';
         debugInfo.style.left = '0';
         debugInfo.style.backgroundColor = 'white';
         debugInfo.style.padding = '10px';
         debugInfo.style.zIndex = '1000';
+        
+        // Remove existing debug info if it exists
+        const existingDebug = document.getElementById('debug-info');
+        if (existingDebug) {
+            existingDebug.remove();
+        }
+        
         document.body.appendChild(debugInfo);
         
         // Try each bucket URL format
@@ -106,36 +136,42 @@ const fetchImages = async () => {
         } else {
             const cols = Array.from(document.getElementsByClassName("col"));
             let loadedImages = 0;
+            let failedImages = 0;
             
             for (const imageName of imageNames) {
-                // URL encode the image name to handle spaces and special characters
-                const encodedName = encodeURIComponent(imageName);
-                const fullUrl = workingBucketUrl + encodedName;
-                
-                const isLoaded = await testImageUrl(fullUrl);
-                if (isLoaded) {
-                    createCard(fullUrl, cols[loadedImages % cols.length], imageName);
-                    loadedImages++;
-                }
-            }
-            
-            debugInfo.textContent += ` | Loaded ${loadedImages} images`;
-            
-            // If no images loaded, try without encoding
-            if (loadedImages === 0) {
-                for (const imageName of imageNames) {
-                    // Try without encoding
-                    const fullUrl = workingBucketUrl + imageName;
+                try {
+                    // Try different URL encoding approaches
+                    const encodings = [
+                        encodeURIComponent(imageName),   // Full encoding
+                        imageName.replace(/ /g, '%20'),  // Just spaces
+                        imageName                        // No encoding
+                    ];
                     
-                    const isLoaded = await testImageUrl(fullUrl);
-                    if (isLoaded) {
-                        createCard(fullUrl, cols[loadedImages % cols.length], imageName);
-                        loadedImages++;
+                    let loaded = false;
+                    
+                    for (const encodedName of encodings) {
+                        const fullUrl = workingBucketUrl + encodedName;
+                        
+                        const isLoaded = await testImageUrl(fullUrl);
+                        if (isLoaded) {
+                            createCard(fullUrl, cols[loadedImages % cols.length], imageName);
+                            loadedImages++;
+                            loaded = true;
+                            break;
+                        }
                     }
+                    
+                    if (!loaded) {
+                        failedImages++;
+                    }
+                } catch (error) {
+                    console.error(`Error loading image ${imageName}:`, error);
+                    failedImages++;
                 }
-                
-                debugInfo.textContent += ` | After retry: ${loadedImages} images`;
             }
+            
+            // Update debug info with loaded images count
+            debugInfo.textContent = `Working bucket URL: ${workingBucketUrl} | Loaded ${loadedImages} images | Failed: ${failedImages}`;
         }
         
         document.getElementById('loader').style.display = 'none';
@@ -160,8 +196,17 @@ const createCard = (imageUrl, col, imageName) => {
 
     const downloadBtn = document.createElement("button");
     downloadBtn.innerHTML = '<i class="fas fa-download"></i>';
-    downloadBtn.onclick = () => {
-        window.open(imageUrl, '_blank');
+    downloadBtn.onclick = (e) => {
+        e.stopPropagation(); // Prevent event bubbling
+        
+        // Create a temporary link element
+        const a = document.createElement('a');
+        a.href = imageUrl;
+        a.download = imageName || 'download.jpg';
+        a.target = '_blank';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
     };
 
     overlay.appendChild(downloadBtn);
@@ -176,4 +221,15 @@ const createCard = (imageUrl, col, imageName) => {
 };
 
 // Ensure images load on page load
-document.addEventListener("DOMContentLoaded", fetchImages);
+document.addEventListener("DOMContentLoaded", () => {
+    // Remove any duplicate event handlers from the window.onload script
+    fetchImages();
+    
+    // Fix upload button if needed
+    const uploadButton = document.querySelector('.upload-container button');
+    if (uploadButton) {
+        uploadButton.onclick = () => {
+            document.getElementById('fileInput').click();
+        };
+    }
+});
