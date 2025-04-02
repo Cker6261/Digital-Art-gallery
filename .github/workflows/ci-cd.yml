@@ -1,4 +1,5 @@
 # CI/CD Pipeline for Art Gallery App
+# Updated with new credentials
 name: CI/CD Pipeline
 
 on:
