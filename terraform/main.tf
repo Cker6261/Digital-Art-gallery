@@ -15,6 +15,11 @@ provider "aws" {
 # S3 bucket for image storage
 resource "aws_s3_bucket" "art_gallery" {
   bucket = var.bucket_name
+  
+  lifecycle {
+    ignore_changes = all
+    prevent_destroy = true
+  }
 }
 
 # Enable versioning
@@ -56,6 +61,11 @@ resource "aws_s3_bucket_policy" "art_gallery" {
 # ECR Repository for Docker images
 resource "aws_ecr_repository" "art_gallery" {
   name = var.ecr_repository_name
+  
+  lifecycle {
+    ignore_changes = all
+    prevent_destroy = true
+  }
 }
 
 # ECS Cluster
@@ -79,6 +89,11 @@ resource "aws_iam_role" "ecs_task_execution_role" {
       }
     ]
   })
+  
+  lifecycle {
+    ignore_changes = all
+    prevent_destroy = true
+  }
 }
 
 # Add ECR access policy
@@ -164,6 +179,11 @@ resource "aws_iam_role_policy_attachment" "s3_access_attachment" {
 resource "aws_cloudwatch_log_group" "art_gallery" {
   name              = "/ecs/art-gallery-app"
   retention_in_days = 7
+  
+  lifecycle {
+    ignore_changes = all
+    prevent_destroy = true
+  }
 }
 
 # ECS task definition
