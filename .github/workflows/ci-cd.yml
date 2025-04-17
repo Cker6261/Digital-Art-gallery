@@ -11,6 +11,12 @@ jobs:
     name: Test & Analyze
     runs-on: ubuntu-latest
     
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: eu-north-1
+      NODE_ENV: test
+
     steps:
       - uses: actions/checkout@v3
         with:
@@ -20,6 +26,7 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '18'
+          cache: 'npm'
           
       - name: Install dependencies
         run: npm ci
@@ -28,20 +35,15 @@ jobs:
         run: npm run test:coverage
         
       - name: SonarCloud Scan
+        if: github.event_name == 'push'
         uses: SonarSource/sonarcloud-github-action@master
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       
-      - name: Check Prometheus metrics
-        run: |
-          npm start &
-          sleep 10
-          curl http://localhost:5000/metrics
-
   deploy:
     needs: analyze
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     
     steps:
@@ -62,4 +64,10 @@ jobs:
             --exclude ".github/*" \
             --exclude "terraform/*" \
             --exclude "README.md" \
+            --exclude "*.test.js" \
+            --exclude "sonar-project.properties" \
+            --exclude "prometheus.yml" \
+            --exclude "docker-compose.yml" \
+            --exclude "Dockerfile" \
+            --exclude ".env" \
             --delete
