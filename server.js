@@ -1,7 +1,5 @@
 import express from 'express';
 import path from 'path';
-import { fileURLToPath } from 'url';
-import fs from 'fs';
 import cors from 'cors';
 import promBundle from 'express-prom-bundle';
 import client from 'prom-client';
@@ -9,9 +7,6 @@ import { S3Client, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import dotenv from 'dotenv';
 
 dotenv.config();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // Initialize S3 Client
 const s3Client = new S3Client({
@@ -55,7 +50,6 @@ const PORT = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static(__dirname));
 app.use(metricsMiddleware);
 
 // Health check endpoint
